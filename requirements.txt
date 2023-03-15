@@ -1,0 +1,6 @@
+argparse
+pyvmomi
+requests
+vcrpy>=1.1.1
+pyVim
+python-decouple
