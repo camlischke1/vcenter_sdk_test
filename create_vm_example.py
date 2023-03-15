@@ -29,7 +29,6 @@ def list_vms(client):
         return list
         
 
-#confirmed
 def create_vm(client, 
               datacenter_name=None,
               vm_folder_name=None,
@@ -180,7 +179,17 @@ def main():
 
     #change whatever you want to do down here
     
+    # create_vm(client = client, 
+    #           datacenter_name = datacenter_name,
+    #           vm_folder_name = vm_folder,
+    #           datastore_name = datastore_name,
+    #           guest_os=os_tag,
+    #           vm_name=vm_name,
+    #           standard_network=network_id,
+    #           iso_datastore_path = iso_datastore_path
+    #           )
 
+    #delete_vm(client,vm_name)
 
 
 if __name__ == '__main__':
