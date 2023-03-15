@@ -1,6 +1,11 @@
 from decouple import config
 import requests
 import urllib3
+from vmware.vapi.vsphere.client import create_vsphere_client
+from pprint import pprint
+from decouple import config
+import requests
+import urllib3
 from pprint import pprint
 from com.vmware.vcenter.vm_client import Tools
 from vmware.vapi.vsphere.client import create_vsphere_client
@@ -30,65 +35,6 @@ def list_vms(client):
         list = client.vcenter.VM.list()
         pprint(list)
         return list
-        
-
-def create_vm(client, datacenter_name,vm_folder_name,datastore_name,std_portgroup_name,guest_os="WINDOWS_9_64",vm_name="default vmname"):
-        """
-            Create a VM using a predefined client.
-            @param client: vsphere_client defined by vmware.vapi.vsphere.client.create_vsphere_client()
-            @param datacenter_name
-            @param vm_folder_name
-            @param datastore_name
-            @param std_portgroup_name
-            @optional param guest_os defaults to "WINDOWS_9_64"
-            @optional param vm_name defaults to "default vm_name"
-        """
-        placement_spec = vm_placement_helper.get_placement_spec_for_resource_pool(
-                client,
-                datacenter_name,
-                vm_folder_name,
-                datastore_name)
-
-        # Get a standard network backing
-        standard_network = network_helper.get_network_backing(
-            client,
-            std_portgroup_name,
-            datacenter_name,
-            Network.Type.STANDARD_PORTGROUP)
-
-        boot_disk = Disk.CreateSpec(type=Disk.HostBusAdapterType.SCSI,
-                                    scsi=ScsiAddressSpec(bus=0, unit=0),
-                                    new_vmdk=Disk.VmdkCreateSpec())
-        data_disk = Disk.CreateSpec(new_vmdk=Disk.VmdkCreateSpec())
-
-        nic = Ethernet.CreateSpec(
-            start_connected=True,
-            backing=Ethernet.BackingSpec(
-                type=Ethernet.BackingType.STANDARD_PORTGROUP,
-                network=standard_network))
-
-        boot_device_order = [
-            BootDevice.EntryCreateSpec(BootDevice.Type.ETHERNET),
-            BootDevice.EntryCreateSpec(BootDevice.Type.DISK)]
-
-        vm_create_spec = VM.CreateSpec(name=vm_name,
-                                        guest_os=guest_os,
-                                        placement=placement_spec,
-                                        disks=[boot_disk, data_disk],
-                                        nics=[nic],
-                                        boot_devices=boot_device_order)
-        print('\n# Example: create_basic_vm: Creating a VM using spec\n-----')
-        print(pp(vm_create_spec))
-        print('-----')
-
-        vm = client.vcenter.VM.create(vm_create_spec)
-
-        print("create_basic_vm: Created VM '{}' ({})".format(vm_name, vm))
-
-        vm_info = client.vcenter.VM.get(vm)
-        print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
-
-        return vm
 
 
 # confirmed
@@ -131,9 +77,7 @@ def main():
     vsphere_client = create_vsphere_client(server=esx_ip, username=user, password=pwd, session=session)
 
     #change whatever you want to do down here
-    #create_vm(vsphere_client, datacenter_name,vm_folder_name,datastore_name,std_portgroup_name,vm_name="Cams test")
-    #delete_vm(vsphere_client,"test123")
-    #list_vms(vsphere_client)
+    
 
 
 if __name__ == '__main__':
