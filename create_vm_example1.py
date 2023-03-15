@@ -31,22 +31,20 @@ def list_vms(client):
         return(client.vcenter.VM.list())
         
 
-def create_vm(client, datacenter_name,vm_folder_name,datastore_name,std_portgroup_name,):
+def create_vm(client, datacenter_name,vm_folder_name,datastore_name,std_portgroup_name,guest_os):
     
     placement_spec = vm_placement_helper.get_placement_spec_for_resource_pool(
-            self.client,
+            client,
             datacenter_name,
             vm_folder_name,
             datastore_name)
 
     # Get a standard network backing
     standard_network = network_helper.get_network_backing(
-        self.client,
+        client,
         std_portgroup_name,
         datacenter_name,
         Network.Type.STANDARD_PORTGROUP)
-
-    guest_os = testbed.config['VM_GUESTOS']
 
     boot_disk = Disk.CreateSpec(type=Disk.HostBusAdapterType.SCSI,
                                 scsi=ScsiAddressSpec(bus=0, unit=0),
@@ -102,6 +100,7 @@ def main():
     pwd = config('VCENTER_PASS')
     datacenter_name = config('DATACENTER')
     datastore_name = config('DATASTORE')
+    guest_os = config('GUEST_OS')
 
     #initiates connection to vcenter, leave this as template
     session = requests.session()
