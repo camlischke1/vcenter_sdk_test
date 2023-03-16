@@ -25,10 +25,36 @@ from samples.vsphere.vcenter.helper.vm_helper import get_vm
 # confirmed
 def list_vms(client):
         list = client.vcenter.VM.list()
-        pprint(list, indent=4)
+        # pprint(list, indent=4)
         # print(list)
+        
         print(list[0])
         print()
+        
+        
+        # print(list2)
+
+        for i in range(len(list)):
+            #  print(list[i])
+            list2 = str(list[i]).split(", ")
+
+            vm = list2[0].strip()
+            vm = vm.replace(" ", "")
+            vm2 = []
+            for letter in vm:
+                vm2.append(letter)
+
+
+            name = list2[1]
+
+            power_state = list2[2]
+
+            cpu_count = list2[3]
+
+            memory_size_mib = list2[4]
+
+            print(vm, name, power_state, cpu_count, memory_size_mib)
+        
         return list
         
 

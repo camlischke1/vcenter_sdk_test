@@ -13,12 +13,14 @@ from com.vmware.vcenter_client import VM, Network
 from vmware.vapi.vsphere.client import create_vsphere_client
 
 from samples.vsphere.common.ssl_helper import get_unverified_session
-from samples.vsphere.common import sample_cli
-from samples.vsphere.common import sample_util
 from samples.vsphere.common.sample_util import pp
 from samples.vsphere.vcenter.helper import network_helper
 from samples.vsphere.vcenter.helper import vm_placement_helper
 from samples.vsphere.vcenter.helper.vm_helper import get_vm
+import time
+import logging
+from samples.vsphere.vcenter.helper.guest_helper import \
+    (wait_for_guest_info_ready, wait_for_guest_power_state)
 
 ## PUT DEFINITIONS HERE !!!
 
@@ -205,6 +207,8 @@ def power_off(client, vm_name):
 
 
 
+
+
 def power_suspend(client, vm_name):
     vm = get_vm(client, vm_name)
 
@@ -226,9 +230,8 @@ def power_suspend(client, vm_name):
 
 
 
-
 #confirmed
-def get_guest_info(client, vm_name, force_power_on=False, keep_power_on=False):
+def get_guest_info(client, vm_name, force_power_on=False):
         vm = get_vm(client, vm_name)
         if not vm:
             raise Exception('Sample requires an existing vm with name ({}).'
@@ -238,10 +241,10 @@ def get_guest_info(client, vm_name, force_power_on=False, keep_power_on=False):
 
         # power on the VM if necessary and specified
         status = client.vcenter.vm.Power.get(vm)
-        if status != HardPower.Info(state=HardPower.State.POWERED_ON) and force_power_on:
+        if status != Power.Info(state=Power.State.POWERED_ON) and force_power_on:
             print('You selected force power on. Powering on VM.')
             client.vcenter.vm.Power.start(vm)
-        elif status != HardPower.Info(state=HardPower.State.POWERED_ON) and force_power_on==False:
+        elif status != Power.Info(state=Power.State.POWERED_ON) and force_power_on==False:
             raise Exception('The VM you specified is turned off. '+
                             'To turn on, try again by specifying get_guest_info(client, vm_name, force_power_on=True')
 
@@ -258,12 +261,50 @@ def get_guest_info(client, vm_name, force_power_on=False, keep_power_on=False):
         print('vm.guest.LocalFilesystem.get({})'.format(vm))
         print('LocalFilesystem: {}'.format(pp(local_filesysteem)))
 
-        if not keep_power_on:
-            power_off(client,vm_name)
-            print('Powering off {}'.format(vm))
 
 
+#confirmed
+def get_ip(client,vm_name):
+        vm = get_vm(client, vm_name)
+        if not vm:
+            raise Exception('Sample requires an existing vm with name ({}).'
+                            'Please create the vm first.'.format(vm_name))
+        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
 
+
+        status = client.vcenter.vm.Power.get(vm)
+        if status != Power.Info(state=Power.State.POWERED_ON):
+            raise Exception('The VM you specified is turned off.')
+        
+        identity = client.vcenter.vm.guest.Identity.get(vm)
+        print(identity.ip_address)
+
+        return identity.ip_address
+
+
+#confirmed
+def get_macs(client,vm_name):
+        vm = get_vm(client, vm_name)
+        if not vm:
+            raise Exception('Sample requires an existing vm with name ({}).'
+                            'Please create the vm first.'.format(vm_name))
+        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
+
+
+        status = client.vcenter.vm.Power.get(vm)
+        if status != Power.Info(state=Power.State.POWERED_ON):
+            raise Exception('The VM you specified is turned off.')
+        
+        nic_list = client.vcenter.vm.hardware.Ethernet.list(vm)
+        mac_list = []
+        for i in range(len(nic_list)):
+            mac_list.append(client.vcenter.vm.hardware.Ethernet.get(vm,nic_list[i].nic).mac_address)
+            print(client.vcenter.vm.hardware.Ethernet.get(vm,nic_list[i].nic).mac_address)
+
+        return mac_list
+        
+
+        
 
 def main():
     # uses what is set in .env file to define these global variables
