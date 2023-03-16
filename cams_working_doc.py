@@ -223,9 +223,9 @@ def power_suspend(client, vm_name):
 
     # Suspend the vm if it is on
     if status == Power.Info(state=Power.State.POWERED_ON):
-        print('\n# Example: VM is powered on, power it off')
-        client.vcenter.vm.Power.stop(vm)
-        print('vm.Power.stop({})'.format(vm))
+        print('\n# Example: VM is powered on, suspending')
+        client.vcenter.vm.Power.suspend(vm)
+        print('vm.Power.suspend({})'.format(vm))
 
 
 
@@ -263,6 +263,7 @@ def main():
     #           )
     power_off(client, vm_name)
     #power_on(client,vm_name)
+    #power_suspend(client,vm_name)
     #delete_vm(client,vm_name)
 
 

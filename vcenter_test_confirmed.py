@@ -205,6 +205,27 @@ def power_off(client, vm_name):
 
 
 
+def power_suspend(client, vm_name):
+    vm = get_vm(client, vm_name)
+
+    if not vm:
+        raise Exception('Sample requires an existing vm with name ({}).'
+                        'Please create the vm first.'.format(vm_name))
+    print("Using VM '{}' ({}) for Power Sample".format(vm_name, vm))
+
+    # Get the vm power state
+    print('\n# Example: Get current vm power state')
+    status = client.vcenter.vm.Power.get(vm)
+    print('vm.Power.get({}) -> {}'.format(vm, pp(status)))
+
+    # Suspend the vm if it is on
+    if status == Power.Info(state=Power.State.POWERED_ON):
+        print('\n# Example: VM is powered on, suspending')
+        client.vcenter.vm.Power.suspend(vm)
+        print('vm.Power.suspend({})'.format(vm))
+
+
+
 def main():
     # uses what is set in .env file to define these global variables
     esx_ip = config('VCENTER_IP')
