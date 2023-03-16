@@ -226,6 +226,45 @@ def power_suspend(client, vm_name):
 
 
 
+
+#confirmed
+def get_guest_info(client, vm_name, force_power_on=False, keep_power_on=False):
+        vm = get_vm(client, vm_name)
+        if not vm:
+            raise Exception('Sample requires an existing vm with name ({}).'
+                            'Please create the vm first.'.format(vm_name))
+        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
+
+
+        # power on the VM if necessary and specified
+        status = client.vcenter.vm.Power.get(vm)
+        if status != HardPower.Info(state=HardPower.State.POWERED_ON) and force_power_on:
+            print('You selected force power on. Powering on VM.')
+            client.vcenter.vm.Power.start(vm)
+        elif status != HardPower.Info(state=HardPower.State.POWERED_ON) and force_power_on==False:
+            raise Exception('The VM you specified is turned off. '+
+                            'To turn on, try again by specifying get_guest_info(client, vm_name, force_power_on=True')
+
+        # wait for guest info to be ready
+        wait_for_guest_info_ready(client, vm, 600)
+
+        # get the Identity
+        identity = client.vcenter.vm.guest.Identity.get(vm)
+        print('vm.guest.Identity.get({})'.format(vm))
+        print('Identity: {}'.format(pp(identity)))
+
+        # get the local filesystem info
+        local_filesysteem = client.vcenter.vm.guest.LocalFilesystem.get(vm)
+        print('vm.guest.LocalFilesystem.get({})'.format(vm))
+        print('LocalFilesystem: {}'.format(pp(local_filesysteem)))
+
+        if not keep_power_on:
+            power_off(client,vm_name)
+            print('Powering off {}'.format(vm))
+
+
+
+
 def main():
     # uses what is set in .env file to define these global variables
     esx_ip = config('VCENTER_IP')

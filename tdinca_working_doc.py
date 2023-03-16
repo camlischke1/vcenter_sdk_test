@@ -19,19 +19,16 @@ from samples.vsphere.common.sample_util import pp
 from samples.vsphere.vcenter.helper import network_helper
 from samples.vsphere.vcenter.helper import vm_placement_helper
 from samples.vsphere.vcenter.helper.vm_helper import get_vm
-import time
-import logging
-
-from com.vmware.vcenter.vm_client import Power as HardPower
-from samples.vsphere.vcenter.helper.guest_helper import \
-    (wait_for_guest_info_ready, wait_for_guest_power_state)
 
 ## PUT DEFINITIONS HERE !!!
 
 # confirmed
 def list_vms(client):
         list = client.vcenter.VM.list()
-        pprint(list)
+        pprint(list, indent=4)
+        # print(list)
+        print(list[0])
+        print()
         return list
         
 
@@ -211,8 +208,6 @@ def power_off(client, vm_name):
 
 
 
-
-
 def power_suspend(client, vm_name):
     vm = get_vm(client, vm_name)
 
@@ -234,44 +229,6 @@ def power_suspend(client, vm_name):
 
 
 
-#confirmed
-def get_guest_info(client, vm_name, force_power_on=False, keep_power_on=False):
-        vm = get_vm(client, vm_name)
-        if not vm:
-            raise Exception('Sample requires an existing vm with name ({}).'
-                            'Please create the vm first.'.format(vm_name))
-        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
-
-
-        # power on the VM if necessary and specified
-        status = client.vcenter.vm.Power.get(vm)
-        if status != HardPower.Info(state=HardPower.State.POWERED_ON) and force_power_on:
-            print('You selected force power on. Powering on VM.')
-            client.vcenter.vm.Power.start(vm)
-        elif status != HardPower.Info(state=HardPower.State.POWERED_ON) and force_power_on==False:
-            raise Exception('The VM you specified is turned off. '+
-                            'To turn on, try again by specifying get_guest_info(client, vm_name, force_power_on=True')
-
-        # wait for guest info to be ready
-        wait_for_guest_info_ready(client, vm, 600)
-
-        # get the Identity
-        identity = client.vcenter.vm.guest.Identity.get(vm)
-        print('vm.guest.Identity.get({})'.format(vm))
-        print('Identity: {}'.format(pp(identity)))
-
-        # get the local filesystem info
-        local_filesysteem = client.vcenter.vm.guest.LocalFilesystem.get(vm)
-        print('vm.guest.LocalFilesystem.get({})'.format(vm))
-        print('LocalFilesystem: {}'.format(pp(local_filesysteem)))
-
-        if not keep_power_on:
-            power_off(client,vm_name)
-            print('Powering off {}'.format(vm))
-
-
-
-
 def main():
     # uses what is set in .env file to define these global variables
     esx_ip = config('VCENTER_IP')
@@ -283,7 +240,7 @@ def main():
     network_id = "network-6009"       #ID for Orchestration 
     vm_folder = 'vcenter_api_test_folder'
     os_tag = "UBUNTU_64"
-    vm_name = "Camtest"
+    vm_name = "tdinca_TEST"
 
     #initiates connection to vcenter, leave this as template
     session = requests.session()
@@ -292,21 +249,23 @@ def main():
     client = create_vsphere_client(server=esx_ip, username=user, password=pwd, session=session)
 
     #change whatever you want to do down here
-    
+
     # create_vm(client = client, 
-    #           datacenter_name = datacenter_name,
-    #           vm_folder_name = vm_folder,
-    #           datastore_name = datastore_name,
-    #           guest_os=os_tag,
-    #           vm_name=vm_name,
-    #           standard_network=network_id,
-    #           iso_datastore_path = iso_datastore_path
-    #           )
-    power_off(client, vm_name)
+    #            datacenter_name = datacenter_name,
+    #            vm_folder_name = vm_folder,
+    #            datastore_name = datastore_name,
+    #            guest_os=os_tag,
+    #            vm_name=vm_name,
+    #            standard_network=network_id,
+    #            iso_datastore_path = iso_datastore_path
+    #            )
+
+    #power_off(client, vm_name)
     #power_on(client,vm_name)
     #power_suspend(client,vm_name)
     #delete_vm(client,vm_name)
-    #get_guest_info(client, vm_name, force_power_on=True, keep_power_on=False)
+    list_vms(client)
+
 
 
 if __name__ == '__main__':
