@@ -19,6 +19,7 @@ from samples.vsphere.common.sample_util import pp
 from samples.vsphere.vcenter.helper import network_helper
 from samples.vsphere.vcenter.helper import vm_placement_helper
 from samples.vsphere.vcenter.helper.vm_helper import get_vm
+import time
 
 ## PUT DEFINITIONS HERE !!!
 
@@ -155,6 +156,78 @@ def delete_vm(client, vm_name):
         print("Deleted VM -- '{}-({})".format(vm_name, vm))
 
 
+# confirmed
+def power_on(client, vm_name):
+    vm = get_vm(client, vm_name)
+
+    if not vm:
+        raise Exception('Sample requires an existing vm with name ({}).'
+                        'Please create the vm first.'.format(vm_name))
+    print("Using VM '{}' ({}) for Power Sample".format(vm_name, vm))
+
+    # Get the vm power state
+    print('\n# Example: Get current vm power state')
+    status = client.vcenter.vm.Power.get(vm)
+    print('vm.Power.get({}) -> {}'.format(vm, pp(status)))
+
+    if status == Power.Info(state=Power.State.POWERED_OFF,
+                clean_power_off=True) or status == Power.Info(state=Power.State.SUSPENDED,
+                clean_power_off=True) or status == Power.Info(
+                state=Power.State.POWERED_OFF) or status == Power.Info(
+                state=Power.State.SUSPENDED):
+        print('# Example: Power on the vm')
+        client.vcenter.vm.Power.start(vm)
+        print('vm.Power.start({})'.format(vm))
+    else:
+         print('vm.Power.start({}) failed. VM already powered on.'.format(vm))
+
+
+
+
+# confirmed
+def power_off(client, vm_name):
+    vm = get_vm(client, vm_name)
+
+    if not vm:
+        raise Exception('Sample requires an existing vm with name ({}).'
+                        'Please create the vm first.'.format(vm_name))
+    print("Using VM '{}' ({}) for Power Sample".format(vm_name, vm))
+
+    # Get the vm power state
+    print('\n# Example: Get current vm power state')
+    status = client.vcenter.vm.Power.get(vm)
+    print('vm.Power.get({}) -> {}'.format(vm, pp(status)))
+
+    # Power off the vm if it is on
+    if status == Power.Info(state=Power.State.POWERED_ON):
+        print('\n# Example: VM is powered on, power it off')
+        client.vcenter.vm.Power.stop(vm)
+        print('vm.Power.stop({})'.format(vm))
+
+
+
+
+
+def power_suspend(client, vm_name):
+    vm = get_vm(client, vm_name)
+
+    if not vm:
+        raise Exception('Sample requires an existing vm with name ({}).'
+                        'Please create the vm first.'.format(vm_name))
+    print("Using VM '{}' ({}) for Power Sample".format(vm_name, vm))
+
+    # Get the vm power state
+    print('\n# Example: Get current vm power state')
+    status = client.vcenter.vm.Power.get(vm)
+    print('vm.Power.get({}) -> {}'.format(vm, pp(status)))
+
+    # Suspend the vm if it is on
+    if status == Power.Info(state=Power.State.POWERED_ON):
+        print('\n# Example: VM is powered on, power it off')
+        client.vcenter.vm.Power.stop(vm)
+        print('vm.Power.stop({})'.format(vm))
+
+
 
 
 
@@ -188,7 +261,8 @@ def main():
     #           standard_network=network_id,
     #           iso_datastore_path = iso_datastore_path
     #           )
-
+    power_off(client, vm_name)
+    #power_on(client,vm_name)
     #delete_vm(client,vm_name)
 
 
