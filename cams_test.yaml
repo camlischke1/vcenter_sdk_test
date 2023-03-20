@@ -1,0 +1,25 @@
+---
+prereqs:
+  datastore_name: datastore1
+  datacenter_name: TrainingDatacenter
+  folder_name: vcenter_api_test_folder
+
+vm:
+  vm_name: cams yaml test
+  cpu_count: 2
+  iso_path: "ISOs/ubuntu-18.04.5-live-server-amd64.iso"
+  memory: 4
+  guest_os: UBUNTU_64
+  hardware_version: VMX_11
+  disks: 2
+  disk1:
+    capacity: 12
+    name: bootme1
+  disk2:
+    capacity: 10
+    name: bootme2
+  nics: 2
+  nic1:
+    network: network-6009
+  nic2:
+    network: network-6009

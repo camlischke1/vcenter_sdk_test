@@ -1,6 +1,7 @@
 from decouple import config
 import requests
 import urllib3
+import yaml
 from pprint import pprint
 from com.vmware.vcenter.vm_client import Tools
 from vmware.vapi.vsphere.client import create_vsphere_client
@@ -125,12 +126,12 @@ def create_vm(client,
         print(pp(vm_create_spec))
         print('-----')
 
-        vm = client.vcenter.VM.create(vm_create_spec)
+        # vm = client.vcenter.VM.create(vm_create_spec)
 
-        print("create_exhaustive_vm: Created VM '{}' ({})".format(vm_name,vm))
+        # print("create_exhaustive_vm: Created VM '{}' ({})".format(vm_name,vm))
 
-        vm_info = client.vcenter.VM.get(vm)
-        print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
+        # vm_info = client.vcenter.VM.get(vm)
+        # print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
 
         return vm
 
@@ -305,6 +306,86 @@ def get_macs(client,vm_name):
         
 
 
+#confirmed
+def create_vm_from_yaml(client, yaml_file):
+        with open(yaml_file, 'r') as file:
+            config = yaml.safe_load(file)
+
+        placement_spec = vm_placement_helper.get_placement_spec_for_resource_pool(
+                    client,
+                    config['prereqs']['datacenter_name'],
+                    config['prereqs']['folder_name'],
+                    config['prereqs']['datastore_name'])
+        iso_datastore_path = "[" + config['prereqs']['datastore_name'] + "] " + config['vm']['iso_path']
+
+        GiB = 1024 * 1024 * 1024
+        GiBMemory = 1024
+
+        disk_specs = []
+        for i in range(1,config['vm']['disks']):
+                current_disk = "disk" + str(i)
+                disk_specs.append(Disk.CreateSpec(type=Disk.HostBusAdapterType.SCSI,
+                                scsi=ScsiAddressSpec(bus=0, unit=0),
+                                new_vmdk=Disk.VmdkCreateSpec(name=config['vm'][current_disk]['name'],
+                                                             capacity=config['vm'][current_disk]['capacity'] * GiB)))
+            
+
+
+        nic_specs = []
+        for i in range(1,config['vm']['nics']):
+            current_nic = "nic" + str(i)
+            nic_specs.append(Ethernet.CreateSpec(
+                    start_connected=True,
+                    mac_type=Ethernet.MacAddressType.GENERATED,
+                    backing=Ethernet.BackingSpec(
+                        type=Ethernet.BackingType.STANDARD_PORTGROUP,
+                        network=config['vm'][current_nic]['network'])))
+
+
+
+        vm_create_spec = VM.CreateSpec(
+            guest_os=config['vm']['guest_os'],
+            name=config['vm']['vm_name'],
+            placement=placement_spec,
+            hardware_version=config['vm']['hardware_version'],
+            cpu=Cpu.UpdateSpec(count=config['vm']['cpu_count'],
+                               cores_per_socket=1,
+                               hot_add_enabled=False,
+                               hot_remove_enabled=False),
+            memory=Memory.UpdateSpec(size_mib=config['vm']['memory'] * GiBMemory,
+                                     hot_add_enabled=False),
+            disks=disk_specs,
+            nics=nic_specs,
+            cdroms=[
+                Cdrom.CreateSpec(
+                    start_connected=True,
+                    backing=Cdrom.BackingSpec(type=Cdrom.BackingType.ISO_FILE,
+                                              iso_file=iso_datastore_path)
+                )
+            ],
+            boot=Boot.CreateSpec(type=Boot.Type.BIOS,
+                                 delay=0,
+                                 enter_setup_mode=False
+                                 ),
+            boot_devices=[
+                BootDevice.EntryCreateSpec(BootDevice.Type.CDROM),
+                BootDevice.EntryCreateSpec(BootDevice.Type.DISK),
+                BootDevice.EntryCreateSpec(BootDevice.Type.ETHERNET)
+            ]
+        )
+        print('# Example: create_exhaustive_vm: Creating a VM using spec\n-----')
+        print(pp(vm_create_spec))
+        print('-----')
+
+        vm = client.vcenter.VM.create(vm_create_spec)
+
+        vm_info = client.vcenter.VM.get(vm)
+        print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
+        print("create_exhaustive_vm: Created VM '{}' ({})".format(config['vm']['vm_name'],vm))
+        return vm
+     
+
+
 def main():
     # uses what is set in .env file to define these global variables
     esx_ip = config('VCENTER_IP')
@@ -335,13 +416,14 @@ def main():
     #           standard_network=network_id,
     #           iso_datastore_path = iso_datastore_path
     #           )
-    #power_off(client, vm_name)
-    #power_on(client,vm_name)
-    #power_suspend(client,vm_name)
-    #delete_vm(client,vm_name)
-    #get_guest_info(client, 'caldera', force_power_on=False)
-    get_macs(client,'caldera')
-
+    # power_off(client, vm_name)
+    # power_on(client,vm_name)
+    # power_suspend(client,vm_name)
+    #delete_vm(client,'cams yaml test')
+    # get_guest_info(client, 'caldera', force_power_on=False)
+    # get_macs(client,'caldera')
+    # list_vms(client)
+    #create_vm_from_yaml(client, 'cams_test.yaml')
 
 if __name__ == '__main__':
     main()

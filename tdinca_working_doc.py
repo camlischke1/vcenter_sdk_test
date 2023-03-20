@@ -19,41 +19,92 @@ from samples.vsphere.common.sample_util import pp
 from samples.vsphere.vcenter.helper import network_helper
 from samples.vsphere.vcenter.helper import vm_placement_helper
 from samples.vsphere.vcenter.helper.vm_helper import get_vm
+import time
+import logging
+from samples.vsphere.vcenter.helper.guest_helper import \
+    (wait_for_guest_info_ready, wait_for_guest_power_state)
+
+from samples.vsphere.vcenter.helper import datacenter_helper
 
 ## PUT DEFINITIONS HERE !!!
 
 # confirmed
-def list_vms(client):
+def list_vms_formatted(client):
         list = client.vcenter.VM.list()
-        # pprint(list, indent=4)
-        # print(list)
-        
-        print(list[0])
-        print()
-        
-        
-        # print(list2)
 
         for i in range(len(list)):
-            #  print(list[i])
-            list2 = str(list[i]).split(", ")
-
-            vm = list2[0].strip()
-            vm = vm.replace(" ", "")
-            vm2 = []
-            for letter in vm:
-                vm2.append(letter)
+            ### Split the initial list
+            listSplit = str(list[i]).split(", ")
 
 
-            name = list2[1]
+            vmInitial = listSplit[0].strip()
+            vmInitial = vmInitial.replace(" ", "")
+            vmNext = []
+            for letter in vmInitial:
+                vmNext.append(letter)
+            vmNext = vmNext[1:-1]
+            vmNext.insert(3, " ")
 
-            power_state = list2[2]
+            vm = ''.join([str(elem) for elem in vmNext])
+            
 
-            cpu_count = list2[3]
+            nameInitial = listSplit[1].strip()
+            nameInitial = nameInitial.replace(" ", "")
+            nameNext = []
+            for letter in nameInitial:
+                 nameNext.append(letter)
+            nameNext.insert(5, " ")
+            
+            name = ''.join([str(elem) for elem in nameNext])
 
-            memory_size_mib = list2[4]
 
-            print(vm, name, power_state, cpu_count, memory_size_mib)
+            power_stateInital = listSplit[2].strip()
+            power_stateInital = power_stateInital.replace(" ", "")
+            power_stateNext = []
+            for letter in power_stateInital:
+                 power_stateNext.append(letter)
+            power_stateNext.insert(12, " ")
+            power_state = ''.join([str(elem) for elem in power_stateNext])
+
+            cpu_countInitial = listSplit[3].strip()
+            cpu_countInitial = cpu_countInitial.replace(" ", "")
+            cpu_countNext = []
+            for letter in cpu_countInitial:
+                 cpu_countNext.append(letter)
+            cpu_countNext.insert(10, " ")
+            cpu_count = ''.join([str(elem) for elem in cpu_countNext])
+
+            memory_size_mibInitial = listSplit[4].strip()
+            memory_size_mibInitial = memory_size_mibInitial.replace(" ", "")
+            memory_size_mibNext = []
+            for letter in memory_size_mibInitial:
+                 memory_size_mibNext.append(letter)
+            memory_size_mibNext.insert(16, " ")
+            del memory_size_mibNext[-1] ### Remove Value at Last Index
+            memory_size_mib = ''.join([str(elem) for elem in memory_size_mibNext])
+
+            ### Spacing Formatting ###
+            vmSpacing = "  "
+            if len(vmNext) < 11:
+                 vmSpacing += " "
+
+            nameSpacing = ""
+            nameLength = len(nameNext[5:len(nameNext)])
+            for i in range(26 - nameLength):
+                 nameSpacing += " "
+
+            cpuSpacing = "  "
+            if len(cpu_countNext) < 13:
+                 cpuSpacing += " "
+            
+            powerSpacing = ""
+            if power_stateNext[-1] == 'N':
+                 powerSpacing += "    "
+            elif power_stateNext[-1] == 'F':
+                 powerSpacing += "   "
+
+
+            print(vm, vmSpacing, name, nameSpacing, power_state, powerSpacing, cpu_count, cpuSpacing, memory_size_mib)
         
         return list
         
@@ -253,6 +304,107 @@ def power_suspend(client, vm_name):
         client.vcenter.vm.Power.suspend(vm)
         print('vm.Power.suspend({})'.format(vm))
 
+#confirmed
+def get_guest_info(client, vm_name, force_power_on=False):
+        vm = get_vm(client, vm_name)
+        if not vm:
+            raise Exception('Sample requires an existing vm with name ({}).'
+                            'Please create the vm first.'.format(vm_name))
+        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
+
+
+        # power on the VM if necessary and specified
+        status = client.vcenter.vm.Power.get(vm)
+        if status != Power.Info(state=Power.State.POWERED_ON) and force_power_on:
+            print('You selected force power on. Powering on VM.')
+            client.vcenter.vm.Power.start(vm)
+        elif status != Power.Info(state=Power.State.POWERED_ON) and force_power_on==False:
+            raise Exception('The VM you specified is turned off. '+
+                            'To turn on, try again by specifying get_guest_info(client, vm_name, force_power_on=True')
+
+        # wait for guest info to be ready
+        wait_for_guest_info_ready(client, vm, 600)
+
+        # get the Identity
+        identity = client.vcenter.vm.guest.Identity.get(vm)
+        print('vm.guest.Identity.get({})'.format(vm))
+        print('Identity: {}'.format(pp(identity)))
+
+        # get the local filesystem info
+        local_filesysteem = client.vcenter.vm.guest.LocalFilesystem.get(vm)
+        print('vm.guest.LocalFilesystem.get({})'.format(vm))
+        print('LocalFilesystem: {}'.format(pp(local_filesysteem)))
+
+
+#confirmed
+def get_ip(client,vm_name):
+        vm = get_vm(client, vm_name)
+        if not vm:
+            raise Exception('Sample requires an existing vm with name ({}).'
+                            'Please create the vm first.'.format(vm_name))
+        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
+
+
+        status = client.vcenter.vm.Power.get(vm)
+        if status != Power.Info(state=Power.State.POWERED_ON):
+            raise Exception('The VM you specified is turned off.')
+        
+        identity = client.vcenter.vm.guest.Identity.get(vm)
+        print(identity.ip_address)
+
+        return identity.ip_address
+
+
+#confirmed
+def get_macs(client,vm_name):
+        vm = get_vm(client, vm_name)
+        if not vm:
+            raise Exception('Sample requires an existing vm with name ({}).'
+                            'Please create the vm first.'.format(vm_name))
+        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
+
+
+        status = client.vcenter.vm.Power.get(vm)
+        if status != Power.Info(state=Power.State.POWERED_ON):
+            raise Exception('The VM you specified is turned off.')
+        
+        nic_list = client.vcenter.vm.hardware.Ethernet.list(vm)
+        mac_list = []
+        for i in range(len(nic_list)):
+            mac_list.append(client.vcenter.vm.hardware.Ethernet.get(vm,nic_list[i].nic).mac_address)
+            print(client.vcenter.vm.hardware.Ethernet.get(vm,nic_list[i].nic).mac_address)
+
+        return mac_list
+
+#confirmed
+def get_network_backing(client,
+                        porggroup_name,
+                        datacenter_name,
+                        portgroup_type):
+    """
+    Gets a standard portgroup network backing for a given Datacenter
+    Note: The method assumes that there is only one standard portgroup
+    and datacenter with the mentioned names.
+    """
+    datacenter = datacenter_helper.get_datacenter(client, datacenter_name)
+    if not datacenter:
+        print("Datacenter '{}' not found".format(datacenter_name))
+        return None
+
+    filter = Network.FilterSpec(datacenters=set([datacenter]),
+                                names=set([porggroup_name]),
+                                types=set([portgroup_type]))
+    network_summaries = client.vcenter.Network.list(filter=filter)
+
+    if len(network_summaries) > 0:
+        network = network_summaries[0].network
+        print("Selecting {} Portgroup Network '{}' ({})".
+              format(portgroup_type, porggroup_name, network))
+        return network
+    else:
+        print("Portgroup Network not found in Datacenter '{}'".
+              format(datacenter_name))
+        return None
 
 
 def main():
@@ -290,9 +442,13 @@ def main():
     #power_on(client,vm_name)
     #power_suspend(client,vm_name)
     #delete_vm(client,vm_name)
-    list_vms(client)
+    list_vms_formatted(client)
 
+    get_ip(client, "vcenter")
+    get_macs(client, "KYPO")
 
+    get_network_backing(client, "NERVE", datacenter_name, 'STANDARD_PORTGROUP')
+    # get_network_backing(client, "DIB-Inside", datacenter_name)
 
 if __name__ == '__main__':
     main()

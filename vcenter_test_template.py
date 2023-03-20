@@ -11,7 +11,7 @@ from com.vmware.vcenter.vm.hardware_client import ScsiAddressSpec
 from com.vmware.vcenter.vm_client import (Power,Hardware)
 from com.vmware.vcenter_client import VM, Network
 from vmware.vapi.vsphere.client import create_vsphere_client
-
+import yaml
 from samples.vsphere.common.ssl_helper import get_unverified_session
 from samples.vsphere.common import sample_cli
 from samples.vsphere.common import sample_util
