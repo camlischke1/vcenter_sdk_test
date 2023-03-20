@@ -22,4 +22,4 @@ vm:
   nic1:
     network: Orchestration
   nic2:
-    network: Orchestration
+    network: DIB-Inside

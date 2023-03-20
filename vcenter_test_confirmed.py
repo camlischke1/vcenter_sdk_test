@@ -338,7 +338,7 @@ def get_macs(client,vm_name):
 
 
 #confirmed
-def create_vm_from_yaml(client, yaml_file):
+def create_vm_from_yaml(client, yaml_file,turn_on=False):
         with open(yaml_file, 'r') as file:
             config = yaml.safe_load(file)
 
@@ -354,18 +354,16 @@ def create_vm_from_yaml(client, yaml_file):
         GiBMemory = 1024
 
         disk_specs = []
-        for i in range(1,config['vm']['disks']):
-                current_disk = "disk" + str(i)
-                disk_specs.append(Disk.CreateSpec(type=Disk.HostBusAdapterType.SCSI,
-                                scsi=ScsiAddressSpec(bus=0, unit=0),
-                                new_vmdk=Disk.VmdkCreateSpec(name=config['vm'][current_disk]['name'],
-                                                             capacity=config['vm'][current_disk]['capacity'] * GiB)))
+        for i in range(config['vm']['disks']):
+                current_disk = "disk" + str(i+1)
+                disk_specs.append(Disk.CreateSpec(new_vmdk=Disk.VmdkCreateSpec(name=config['vm'][current_disk]['name'],
+                                                  capacity=config['vm'][current_disk]['capacity'] * GiB)))
             
 
 
         nic_specs = []
-        for i in range(1,config['vm']['nics']):
-            current_nic = "nic" + str(i)
+        for i in range(config['vm']['nics']):
+            current_nic = "nic" + str(i+1)
             nic_specs.append(Ethernet.CreateSpec(
                     start_connected=True,
                     mac_type=Ethernet.MacAddressType.GENERATED,
@@ -414,10 +412,13 @@ def create_vm_from_yaml(client, yaml_file):
         vm_info = client.vcenter.VM.get(vm)
         print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
         print("create_exhaustive_vm: Created VM '{}' ({})".format(config['vm']['vm_name'],vm))
+        
+        if turn_on:
+            power_on(client,config['vm']['vm_name'])
         return vm
-     
 
 
+        
 
 def main():
     # uses what is set in .env file to define these global variables
