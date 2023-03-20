@@ -12,11 +12,11 @@ from com.vmware.vcenter.vm.hardware_client import ScsiAddressSpec
 from com.vmware.vcenter.vm_client import (Power,Hardware)
 from com.vmware.vcenter_client import VM, Network
 from vmware.vapi.vsphere.client import create_vsphere_client
-
+from pyVmomi import vim
 from samples.vsphere.common.ssl_helper import get_unverified_session
 from samples.vsphere.common.sample_util import pp
 from samples.vsphere.vcenter.helper import network_helper
-from samples.vsphere.vcenter.helper import vm_placement_helper
+from samples.vsphere.vcenter.helper import vm_placement_helper, datacenter_helper
 from samples.vsphere.vcenter.helper.vm_helper import get_vm
 import time
 import logging
@@ -30,6 +30,37 @@ def list_vms(client):
         list = client.vcenter.VM.list()
         pprint(list)
         return list
+
+
+
+def get_network_id(client,
+                        network_name,
+                        datacenter_name):
+    """
+    Gets a standard portgroup network backing for a given Datacenter
+    Note: The method assumes that there is only one standard portgroup
+    and datacenter with the mentioned names.
+    """
+    datacenter = datacenter_helper.get_datacenter(client, datacenter_name)
+    if not datacenter:
+        print("Datacenter '{}' not found".format(datacenter_name))
+        return None
+
+    filter = Network.FilterSpec(datacenters=set([datacenter]),
+                                names=set([network_name]))
+    network_summaries = client.vcenter.Network.list(filter=filter)
+
+    if len(network_summaries) > 0:
+        network = network_summaries[0].network
+        print("Selecting Network '{}' ({})".
+              format(network_name, network))
+        return network
+    else:
+        print("Portgroup Network not found in Datacenter '{}'".
+              format(datacenter_name))
+        return None
+
+
         
 
 def create_vm(client, 
@@ -305,6 +336,7 @@ def get_macs(client,vm_name):
         return mac_list
         
 
+
 #confirmed
 def create_vm_from_yaml(client, yaml_file):
         with open(yaml_file, 'r') as file:
@@ -315,8 +347,9 @@ def create_vm_from_yaml(client, yaml_file):
                     config['prereqs']['datacenter_name'],
                     config['prereqs']['folder_name'],
                     config['prereqs']['datastore_name'])
-        iso_datastore_path = "[" + config['prereqs']['datastore_name'] + "] " + config['vm']['iso_path']
 
+        iso_datastore_path = "[" + config['prereqs']['datastore_name'] + "] " + config['vm']['iso_path']
+        
         GiB = 1024 * 1024 * 1024
         GiBMemory = 1024
 
@@ -338,7 +371,7 @@ def create_vm_from_yaml(client, yaml_file):
                     mac_type=Ethernet.MacAddressType.GENERATED,
                     backing=Ethernet.BackingSpec(
                         type=Ethernet.BackingType.STANDARD_PORTGROUP,
-                        network=config['vm'][current_nic]['network'])))
+                        network=get_network_id(client,config['vm'][current_nic]['network'],config['prereqs']['datacenter_name']))))
 
 
 
@@ -382,7 +415,9 @@ def create_vm_from_yaml(client, yaml_file):
         print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
         print("create_exhaustive_vm: Created VM '{}' ({})".format(config['vm']['vm_name'],vm))
         return vm
-             
+     
+
+
 
 def main():
     # uses what is set in .env file to define these global variables

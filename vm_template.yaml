@@ -20,6 +20,6 @@ vm:
     name: bootme2
   nics: 2
   nic1:
-    network: network-6009
+    network: Orchestration
   nic2:
-    network: network-6009
+    network: Orchestration
