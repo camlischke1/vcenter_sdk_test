@@ -260,7 +260,25 @@ def power_suspend(client, vm_name):
         client.vcenter.vm.Power.suspend(vm)
         print('vm.Power.suspend({})'.format(vm))
 
+#confirmed
+def get_state(client,vm_name):
+    vm = get_vm(client, vm_name)
 
+    if not vm:
+        raise Exception('Sample requires an existing vm with name ({}).'
+                        'Please create the vm first.'.format(vm_name))
+    print("Using VM '{}' ({}) for Power Sample".format(vm_name, vm))
+
+    # Get the vm power state
+    print('\n# Example: Get current vm power state')
+    status = client.vcenter.vm.Power.get(vm)
+    print('vm.Power.get({}) -> {}'.format(vm, pp(status)))
+
+    # Power off the vm if it is on
+    if status == Power.Info(state=Power.State.POWERED_ON):
+        return True
+    else:
+        return False
 
 #confirmed
 def get_guest_info(client, vm_name, force_power_on=False):
