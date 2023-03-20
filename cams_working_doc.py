@@ -126,12 +126,12 @@ def create_vm(client,
         print(pp(vm_create_spec))
         print('-----')
 
-        # vm = client.vcenter.VM.create(vm_create_spec)
+        vm = client.vcenter.VM.create(vm_create_spec)
 
-        # print("create_exhaustive_vm: Created VM '{}' ({})".format(vm_name,vm))
+        print("create_exhaustive_vm: Created VM '{}' ({})".format(vm_name,vm))
 
-        # vm_info = client.vcenter.VM.get(vm)
-        # print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
+        vm_info = client.vcenter.VM.get(vm)
+        print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
 
         return vm
 
@@ -423,7 +423,7 @@ def main():
     # get_guest_info(client, 'caldera', force_power_on=False)
     # get_macs(client,'caldera')
     # list_vms(client)
-    #create_vm_from_yaml(client, 'cams_test.yaml')
+    create_vm_from_yaml(client, 'vm_template.yaml')
 
 if __name__ == '__main__':
     main()
