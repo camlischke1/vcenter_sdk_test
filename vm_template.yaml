@@ -6,10 +6,10 @@ prereqs:
   lib_item_name: cams_library
 
 vm:
-  vm_name: cams yaml test
+  vm_name: cams ovf test
   iso_path: "ISOs/ubuntu-18.04.5-live-server-amd64.iso"
   lib_name: cams_library
-  destination_template_name: ubuntutemplate
+  template_name: ubuntutemplate
   current_relative_ova_dir: /home/caldera/backup/vcenter_api_test/
   current_ova_name: ubuntu-22.04-server-cloudimg-amd64.ova
   cpu_count: 2

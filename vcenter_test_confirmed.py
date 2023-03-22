@@ -216,6 +216,30 @@ def get_guest_info(client, vm_name, force_power_on=False):
         print('vm.guest.LocalFilesystem.get({})'.format(vm))
         print('LocalFilesystem: {}'.format(pp(local_filesysteem)))
 
+        # get the Network
+        network = client.vcenter.vm.guest.Networking.get(vm)
+        print('vm.guest.Networking.get({})'.format(vm))
+        print('Networking: {}'.format(pp(network)))
+
+        nic_list = client.vcenter.vm.hardware.Ethernet.list(vm)
+        for i in range(len(nic_list)):
+            print(client.vcenter.vm.hardware.Ethernet.get(vm,nic_list[i].nic))
+
+        # get the Customization
+        cust = client.vcenter.vm.guest.Customization.get(vm)
+        print('\nvm.guest.Customization.get({})'.format(vm))
+        print('Customization: {}'.format(pp(cust)))
+        
+        # get the Operations
+        cust = client.vcenter.vm.guest.Operations.get(vm)
+        print('vm.guest.Operations.get({})'.format(vm))
+        print('Operations: {}'.format(pp(cust)))
+
+        ip = get_ip(client,vm_name)
+        mac = get_macs(client,vm_name)
+
+        print("Quick Access: \n Name: {}\n IP: {}\n MACS: {}".format(vm_name,ip,mac))
+
 
 
 #confirmed
