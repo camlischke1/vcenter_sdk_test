@@ -341,35 +341,39 @@ def create_vm_from_iso(client, yaml_file,turn_on=False):
         return vm
 
 
-def import_ova_to_ovf(yaml_file,server=None, username=None, password=None):
-        servicemanager = ServiceManagerFactory.get_service_manager(server,
-                                                         username,
-                                                         password,
+#confirmed
+def import_ova_to_ovf(yaml_file,conf_file):
+        with open(conf_file, 'r') as file:
+            config = yaml.safe_load(file)
+
+        servicemanager = ServiceManagerFactory.get_service_manager(config['server'],
+                                                         config['user'],
+                                                         config['pass'],
                                                          skip_verification=True)
         cls_client = ClsApiClient(servicemanager)
         helper = ClsApiHelper(cls_client, skip_verification=True)
 
 
         with open(yaml_file, 'r') as file:
-            config = yaml.safe_load(file)
+            template = yaml.safe_load(file)
 
         # Build the storage backing for the library to be created using given datastore name
-        datastore_name = config['prereqs']['datastore_name']
+        datastore_name = template['prereqs']['datastore_name']
         storage_backings = helper.create_storage_backings(service_manager=servicemanager,
                                                                datastore_name=datastore_name)
 
         # Create a local content library backed by the VC datastore using vAPIs
-        local_lib_id = helper.create_local_library(storage_backings, config['vm']['lib_name'])
+        local_lib_id = helper.create_local_library(storage_backings, template['vm']['lib_name'])
 
         # Create a new library item in the content library for uploading the files
         lib_item_id = helper.create_library_item(library_id=local_lib_id,
-                                                           item_name=config['vm']['destination_template_name'],
+                                                           item_name=template['vm']['destination_template_name'],
                                                            item_description='Sample template from ova file',
                                                            item_type='ovf')
         print('Library item created. ID: {0}'.format(lib_item_id))
 
-        ova_file_map = helper.get_ova_file_map(config['vm']['current_relative_ova_dir'],
-                                                    local_filename=config['vm']['current_ova_name'])
+        ova_file_map = helper.get_ova_file_map(template['vm']['current_relative_ova_dir'],
+                                                    local_filename=template['vm']['current_ova_name'])
         # Create a new upload session for uploading the files
         # To ignore expected warnings and skip preview info check,
         # you can set create_spec.warning_behavior during session creation
@@ -390,13 +394,8 @@ def main():
     esx_ip = config('VCENTER_IP')
     user = config('VCENTER_USER')
     pwd = config('VCENTER_PASS')
-    datacenter_name = config('DATACENTER')
-    datastore_name = config('DATASTORE')
-    iso_datastore_path = "[" + datastore_name + "] ISOs/ubuntu-18.04.5-live-server-amd64.iso"
-    network_id = "network-6009"       #ID for Orchestration 
-    vm_folder = 'vcenter_api_test_folder'
-    os_tag = "UBUNTU_64"
-    vm_name = "Camtest"
+    vm_template = 'vm_template.yaml'
+    vcenter_conf = 'vcenter.conf'
 
     #initiates connection to vcenter, leave this as template
     session = requests.session()
