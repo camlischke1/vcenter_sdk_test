@@ -22,6 +22,15 @@ import time
 import logging
 from samples.vsphere.vcenter.helper.guest_helper import \
     (wait_for_guest_info_ready, wait_for_guest_power_state)
+from samples.vsphere.contentlibrary.lib.cls_api_helper import ClsApiHelper
+from com.vmware.vcenter.ovf_client import LibraryItem
+from samples.vsphere.common.service_manager_factory import ServiceManagerFactory
+from samples.vsphere.contentlibrary.lib.cls_api_client import ClsApiClient
+from com.vmware.content.library.item.updatesession_client import (
+    File as UpdateSessionFile, PreviewInfo, WarningType, WarningBehavior)
+from com.vmware.content.library.item_client import UpdateSessionModel
+from samples.vsphere.common.id_generator import generate_random_uuid
+
 
 ## PUT DEFINITIONS HERE !!!
 
@@ -62,110 +71,6 @@ def get_network_id(client,
 
 
         
-
-def create_vm(client, 
-              datacenter_name=None,
-              vm_folder_name=None,
-              datastore_name=None,
-              guest_os=None,
-              vm_name=None,
-              placement_spec=None,
-              standard_network=None,
-              iso_datastore_path=None       #must be in format "[datastore_name] path/without/starting/slash"
-              ):
-
-        if not placement_spec:
-            placement_spec = vm_placement_helper.get_placement_spec_for_resource_pool(
-                client,
-                datacenter_name,
-                vm_folder_name,
-                datastore_name)
-
-
-        """
-        Create an exhaustive VM.
-
-        Using the provided PlacementSpec, create a VM with a selected Guest OS
-        and provided name.
-
-        Create a VM with the following configuration:
-        * Hardware Version = VMX_11 (for 6.0)
-        * CPU (count = 2, coresPerSocket = 2, hotAddEnabled = false,
-        hotRemoveEnabled = false)
-        * Memory (size_mib = 2 GB, hotAddEnabled = false)
-        * 3 Disks and specify each of the HBAs and the unit numbers
-          * (capacity=40 GB, name=<some value>, spaceEfficient=true)
-        * Specify 2 ethernet adapters, one using a Standard Portgroup backing and
-        the
-          * nic2: Specify Ethernet (macType=GENERATED)
-        * 1 CDROM (type=ISO_FILE, file="os.iso", startConnected=true)
-        * 1 Serial Port (type=NETWORK_SERVER, file="tcp://localhost/16000",
-        startConnected=true)
-        * 1 Parallel Port (type=HOST_DEVICE, startConnected=false)
-        * 1 Floppy Drive (type=CLIENT_DEVICE)
-        * Boot, type=BIOS
-        * BootDevice order: CDROM, DISK, ETHERNET
-
-        Use guest and system provided defaults for remaining configuration settings.
-        """
-        GiB = 1024 * 1024 * 1024
-        GiBMemory = 1024
-
-        vm_create_spec = VM.CreateSpec(
-            guest_os=guest_os,
-            name=vm_name,
-            placement=placement_spec,
-            hardware_version=Hardware.Version.VMX_11,
-            cpu=Cpu.UpdateSpec(count=2,
-                               cores_per_socket=1,
-                               hot_add_enabled=False,
-                               hot_remove_enabled=False),
-            memory=Memory.UpdateSpec(size_mib=2 * GiBMemory,
-                                     hot_add_enabled=False),
-            disks=[
-                Disk.CreateSpec(type=Disk.HostBusAdapterType.SCSI,
-                                scsi=ScsiAddressSpec(bus=0, unit=0),
-                                new_vmdk=Disk.VmdkCreateSpec(name='boot',
-                                                             capacity=40 * GiB))
-            ],
-            nics=[
-                Ethernet.CreateSpec(
-                    start_connected=True,
-                    mac_type=Ethernet.MacAddressType.GENERATED,
-                    backing=Ethernet.BackingSpec(
-                        type=Ethernet.BackingType.STANDARD_PORTGROUP,
-                        network=standard_network)),
-            ],
-            cdroms=[
-                Cdrom.CreateSpec(
-                    start_connected=True,
-                    backing=Cdrom.BackingSpec(type=Cdrom.BackingType.ISO_FILE,
-                                              iso_file=iso_datastore_path)
-                )
-            ],
-            boot=Boot.CreateSpec(type=Boot.Type.BIOS,
-                                 delay=0,
-                                 enter_setup_mode=False
-                                 ),
-            boot_devices=[
-                BootDevice.EntryCreateSpec(BootDevice.Type.CDROM),
-                BootDevice.EntryCreateSpec(BootDevice.Type.DISK),
-                BootDevice.EntryCreateSpec(BootDevice.Type.ETHERNET)
-            ]
-        )
-        print('# Example: create_exhaustive_vm: Creating a VM using spec\n-----')
-        print(pp(vm_create_spec))
-        print('-----')
-
-        vm = client.vcenter.VM.create(vm_create_spec)
-
-        print("create_exhaustive_vm: Created VM '{}' ({})".format(vm_name,vm))
-
-        vm_info = client.vcenter.VM.get(vm)
-        print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
-
-        return vm
-
 
 # confirmed
 def delete_vm(client, vm_name):
@@ -356,7 +261,7 @@ def get_macs(client,vm_name):
 
 
 #confirmed
-def create_vm_from_yaml(client, yaml_file,turn_on=False):
+def create_vm_from_iso(client, yaml_file,turn_on=False):
         with open(yaml_file, 'r') as file:
             config = yaml.safe_load(file)
 
@@ -434,6 +339,48 @@ def create_vm_from_yaml(client, yaml_file,turn_on=False):
         if turn_on:
             power_on(client,config['vm']['vm_name'])
         return vm
+
+
+def import_ova_to_ovf(yaml_file,server=None, username=None, password=None):
+        servicemanager = ServiceManagerFactory.get_service_manager(server,
+                                                         username,
+                                                         password,
+                                                         skip_verification=True)
+        cls_client = ClsApiClient(servicemanager)
+        helper = ClsApiHelper(cls_client, skip_verification=True)
+
+
+        with open(yaml_file, 'r') as file:
+            config = yaml.safe_load(file)
+
+        # Build the storage backing for the library to be created using given datastore name
+        datastore_name = config['prereqs']['datastore_name']
+        storage_backings = helper.create_storage_backings(service_manager=servicemanager,
+                                                               datastore_name=datastore_name)
+
+        # Create a local content library backed by the VC datastore using vAPIs
+        local_lib_id = helper.create_local_library(storage_backings, config['vm']['lib_name'])
+
+        # Create a new library item in the content library for uploading the files
+        lib_item_id = helper.create_library_item(library_id=local_lib_id,
+                                                           item_name=config['vm']['destination_template_name'],
+                                                           item_description='Sample template from ova file',
+                                                           item_type='ovf')
+        print('Library item created. ID: {0}'.format(lib_item_id))
+
+        ova_file_map = helper.get_ova_file_map(config['vm']['current_relative_ova_dir'],
+                                                    local_filename=config['vm']['current_ova_name'])
+        # Create a new upload session for uploading the files
+        # To ignore expected warnings and skip preview info check,
+        # you can set create_spec.warning_behavior during session creation
+        session_id = cls_client.upload_service.create(
+            create_spec=UpdateSessionModel(library_item_id=lib_item_id),
+            client_token=generate_random_uuid())
+        helper.upload_files_in_session(ova_file_map, session_id)
+
+        cls_client.upload_service.complete(session_id)
+        cls_client.upload_service.delete(session_id)
+        print('Uploaded ova file as an ovf template to library item {0}'.format(lib_item_id))
 
 
         
