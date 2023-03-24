@@ -8,12 +8,10 @@ from vmware.vapi.vsphere.client import create_vsphere_client
 from com.vmware.vcenter.vm.hardware.boot_client import Device as BootDevice
 from com.vmware.vcenter.vm.hardware_client import (
     Cpu, Memory, Disk, Ethernet, Cdrom, Serial, Parallel, Floppy, Boot)
-from com.vmware.vcenter.vm.hardware_client import ScsiAddressSpec
 from com.vmware.vcenter.vm_client import (Power,Hardware)
 from com.vmware.vcenter_client import VM, Network
 from vmware.vapi.vsphere.client import create_vsphere_client
 from pyVmomi import vim
-from samples.vsphere.common.ssl_helper import get_unverified_session
 from samples.vsphere.common.sample_util import pp
 from samples.vsphere.vcenter.helper import network_helper
 from samples.vsphere.vcenter.helper import vm_placement_helper, datacenter_helper
@@ -590,6 +588,64 @@ def update_networking(yaml_file,conf_file):
 
         return vm
 
+        
+     
+
+#confirmed
+def clone_to_template(yaml_file, conf_file):
+        with open(conf_file, 'r') as file:
+            config = yaml.safe_load(file)
+
+        with open(yaml_file, 'r') as file:
+            template = yaml.safe_load(file)
+
+
+        #creating vcenter client, different than APIclient
+        session = requests.session()
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        vsphere_client = create_vsphere_client(server=config['server'],
+                                                username=config['user'],
+                                                password=config['pass'], session=session)
+        servicemanager = ServiceManagerFactory.get_service_manager(config['server'],
+                                                                    config['user'],
+                                                                    config['pass'],
+                                                                    skip_verification=True)
+
+        client = ClsApiClient(servicemanager)
+        helper = ClsApiHelper(client, skip_verification=True)
+        
+        # Get the identifiers
+        vm_id = get_vm(vsphere_client, template['vm']['vm_name'])
+        placement_spec = vm_placement_helper.get_placement_spec_for_resource_pool(
+                    vsphere_client,
+                    template['prereqs']['datacenter_name'],
+                    template['prereqs']['folder_name'],
+                    template['prereqs']['datastore_name'])
+
+
+        # Create a library
+        if template['vm']['existing_library_id'] == "None":
+            storage_backings = helper.create_storage_backings(servicemanager, template['prereqs']['datastore_name'])
+            library_id = helper.create_local_library(storage_backings,template['vm']['lib_name'])
+        else:
+            library_id = template['vm']['existing_library_id']
+
+        # Build the create specification
+        create_spec = VmtxLibraryItem.CreateSpec()
+        create_spec.source_vm = vm_id
+        create_spec.library = library_id
+        create_spec.name = template['vm']['template_name']
+        create_spec.placement = VmtxLibraryItem.CreatePlacementSpec(resource_pool=placement_spec.resource_pool)
+
+        # Create a new library item from the source VM
+        item_id = client.vmtx_service.create(create_spec)
+        print("Created VM template item '{0}' with ID: {1}".format(
+            create_spec.name, item_id))
+
+        # Retrieve the library item info
+        info = client.vmtx_service.get(item_id)
+        print('VM template guest OS: {0}'.format(info.guest_os))
 
         
 
