@@ -647,6 +647,69 @@ def clone_to_template(yaml_file, conf_file):
         info = client.vmtx_service.get(item_id)
         print('VM template guest OS: {0}'.format(info.guest_os))
 
+
+# confirmed
+def create_vm_from_template(yaml_file,conf_file,turn_on=False):
+        with open(conf_file, 'r') as file:
+            config = yaml.safe_load(file)
+
+        with open(yaml_file, 'r') as file:
+            template = yaml.safe_load(file)
+
+
+        #creating vcenter client, different than APIclient
+        session = requests.session()
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        vsphere_client = create_vsphere_client(server=config['server'],
+                                                username=config['user'],
+                                                password=config['pass'], session=session)
+        servicemanager = ServiceManagerFactory.get_service_manager(config['server'],
+                                                                    config['user'],
+                                                                    config['pass'],
+                                                                    skip_verification=True)
+
+        client = ClsApiClient(servicemanager)
+        helper = ClsApiHelper(client, skip_verification=True)
+        
+        # Get the identifiers
+        id_holder = vm_placement_helper.get_placement_spec_for_resource_pool(
+                    vsphere_client,
+                    template['prereqs']['datacenter_name'],
+                    template['prereqs']['folder_name'],
+                    template['prereqs']['datastore_name'])
+             # Get the identifiers of the resources used for deployment
+        item_id = helper.get_item_id_by_name(template['vm']['template_name'])
+
+        # Build the deployment specification
+        placement_spec = VmtxLibraryItem.DeployPlacementSpec(
+                                folder=id_holder.folder,
+                                resource_pool=id_holder.resource_pool)
+        vm_home_storage_spec = VmtxLibraryItem.DeploySpecVmHomeStorage(datastore=id_holder.datastore)
+        disk_storage_spec = VmtxLibraryItem.DeploySpecDiskStorage(datastore=id_holder.datastore)
+        deploy_spec = VmtxLibraryItem.DeploySpec(
+                                name=template['vm']['vm_name'],
+                                placement=placement_spec,
+                                vm_home_storage=vm_home_storage_spec,
+                                disk_storage=disk_storage_spec)
+
+        # Deploy a virtual machine from the VM template item
+        vm_id = client.vmtx_service.deploy(item_id, deploy_spec)
+        vm = get_obj_by_moId(servicemanager.content,[vim.VirtualMachine], vm_id)
+        print("Deployed VM '{0}' with ID: {1}".format(vm.name,vm_id))
+
+        # Print a summary of the deployed VM
+        vm_summary = vm.summary.config
+        print('Guest OS: {0}'.format(vm_summary.guestId))
+        print('{0} CPU(s)'.format(vm_summary.numCpu))
+        print('{0} MB memory'.format(vm_summary.memorySizeMB))
+        print('{0} disk(s)'.format(vm_summary.numVirtualDisks))
+        print('{0} network adapter(s)'.format(vm_summary.numEthernetCards))
+
+        if turn_on:
+             power_on(vsphere_client,template['vm']['vm_name'])
+        return vm
+             
         
 
 def main():

@@ -6,7 +6,7 @@ prereqs:
   lib_item_name: cams_library
 
 vm:
-  vm_name: Kali_Empire
+  vm_name: Kali_template_test
   iso_path: "ISOs/ubuntu-18.04.5-live-server-amd64.iso"
   lib_name: cams_library_2
   existing_library_id: f01e40a7-34f9-4409-89b2-af4dd1520331
