@@ -8,10 +8,11 @@ prereqs:
 vm:
   vm_name: cams ovf test
   iso_path: "ISOs/ubuntu-18.04.5-live-server-amd64.iso"
-  lib_name: cams_library_1
+  lib_name: cams_library_2
+  existing_library_id: f01e40a7-34f9-4409-89b2-af4dd1520331
   template_name: ubuntutemplate
   ova_current_full_path: /home/caldera/backup/vcenter_api_test/
-  current_ova_name: ubuntu-22.04-server-cloudimg-amd64.ova
+  current_ova_name: bionic-server-cloudimg-amd64.ova
   cpu_count: 2
   memory: 4
   guest_os: UBUNTU_64

@@ -18,19 +18,20 @@ from samples.vsphere.common.sample_util import pp
 from samples.vsphere.vcenter.helper import network_helper
 from samples.vsphere.vcenter.helper import vm_placement_helper, datacenter_helper
 from samples.vsphere.vcenter.helper.vm_helper import get_vm
-import time
-import logging
 from samples.vsphere.vcenter.helper.guest_helper import \
     (wait_for_guest_info_ready, wait_for_guest_power_state)
 from samples.vsphere.contentlibrary.lib.cls_api_helper import ClsApiHelper
 from com.vmware.vcenter.ovf_client import LibraryItem
+from com.vmware.vcenter.vm_template_client import (
+    LibraryItems as VmtxLibraryItem)
 from samples.vsphere.common.service_manager_factory import ServiceManagerFactory
 from samples.vsphere.contentlibrary.lib.cls_api_client import ClsApiClient
 from com.vmware.content.library.item.updatesession_client import (
     File as UpdateSessionFile, PreviewInfo, WarningType, WarningBehavior)
 from com.vmware.content.library.item_client import UpdateSessionModel
 from samples.vsphere.common.id_generator import generate_random_uuid
-
+from samples.vsphere.common.vim.helpers.vim_utils import (
+    get_obj, get_obj_by_moId, poweron_vm, poweroff_vm, delete_object)
 
 ## PUT DEFINITIONS HERE !!!
 
@@ -70,7 +71,6 @@ def get_network_id(client,
         return None
 
 
-        
 
 # confirmed
 def delete_vm(client, vm_name):
@@ -143,7 +143,24 @@ def power_off(client, vm_name):
         print('vm.Power.stop({})'.format(vm))
 
 
+def get_state(client,vm_name):
+    vm = get_vm(client, vm_name)
 
+    if not vm:
+        raise Exception('Sample requires an existing vm with name ({}).'
+                        'Please create the vm first.'.format(vm_name))
+    print("Using VM '{}' ({}) for Power Sample".format(vm_name, vm))
+
+    # Get the vm power state
+    print('\n# Example: Get current vm power state')
+    status = client.vcenter.vm.Power.get(vm)
+    print('vm.Power.get({}) -> {}'.format(vm, pp(status)))
+
+    # Power off the vm if it is on
+    if status == Power.Info(state=Power.State.POWERED_ON):
+        return True
+    else:
+        return False
 
 
 def power_suspend(client, vm_name):
@@ -165,25 +182,7 @@ def power_suspend(client, vm_name):
         client.vcenter.vm.Power.suspend(vm)
         print('vm.Power.suspend({})'.format(vm))
 
-#confirmed
-def get_state(client,vm_name):
-    vm = get_vm(client, vm_name)
 
-    if not vm:
-        raise Exception('Sample requires an existing vm with name ({}).'
-                        'Please create the vm first.'.format(vm_name))
-    print("Using VM '{}' ({}) for Power Sample".format(vm_name, vm))
-
-    # Get the vm power state
-    print('\n# Example: Get current vm power state')
-    status = client.vcenter.vm.Power.get(vm)
-    print('vm.Power.get({}) -> {}'.format(vm, pp(status)))
-
-    # Power off the vm if it is on
-    if status == Power.Info(state=Power.State.POWERED_ON):
-        return True
-    else:
-        return False
 
 #confirmed
 def get_guest_info(client, vm_name, force_power_on=False):
@@ -221,9 +220,12 @@ def get_guest_info(client, vm_name, force_power_on=False):
         print('vm.guest.Networking.get({})'.format(vm))
         print('Networking: {}'.format(pp(network)))
 
-        nic_list = client.vcenter.vm.hardware.Ethernet.list(vm)
-        for i in range(len(nic_list)):
-            print(client.vcenter.vm.hardware.Ethernet.get(vm,nic_list[i].nic))
+        nic_summaries = client.vcenter.vm.hardware.Ethernet.list(vm)
+        for nic_summary in nic_summaries:
+            nic = nic_summary.nic
+            nic_info = client.vcenter.vm.hardware.Ethernet.get(vm=vm, nic=nic)
+            print('vm.hardware.Ethernet.get({}, {}) -> {}'.
+                format(vm, nic, nic_info))
 
         # get the Customization
         cust = client.vcenter.vm.guest.Customization.get(vm)
@@ -237,9 +239,7 @@ def get_guest_info(client, vm_name, force_power_on=False):
 
         ip = get_ip(client,vm_name)
         mac = get_macs(client,vm_name)
-
         print("Quick Access: \n Name: {}\n IP: {}\n MACS: {}".format(vm_name,ip,mac))
-
 
 
 #confirmed
@@ -248,7 +248,6 @@ def get_ip(client,vm_name):
         if not vm:
             raise Exception('Sample requires an existing vm with name ({}).'
                             'Please create the vm first.'.format(vm_name))
-        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
 
 
         status = client.vcenter.vm.Power.get(vm)
@@ -256,7 +255,6 @@ def get_ip(client,vm_name):
             raise Exception('The VM you specified is turned off.')
         
         identity = client.vcenter.vm.guest.Identity.get(vm)
-        print(identity.ip_address)
 
         return identity.ip_address
 
@@ -267,7 +265,6 @@ def get_macs(client,vm_name):
         if not vm:
             raise Exception('Sample requires an existing vm with name ({}).'
                             'Please create the vm first.'.format(vm_name))
-        print("Using VM '{}' ({}) for Guest Info Sample".format(vm_name, vm))
 
 
         status = client.vcenter.vm.Power.get(vm)
@@ -278,58 +275,71 @@ def get_macs(client,vm_name):
         mac_list = []
         for i in range(len(nic_list)):
             mac_list.append(client.vcenter.vm.hardware.Ethernet.get(vm,nic_list[i].nic).mac_address)
-            print(client.vcenter.vm.hardware.Ethernet.get(vm,nic_list[i].nic).mac_address)
 
         return mac_list
         
 
 
 #confirmed
-def create_vm_from_iso(client, yaml_file,turn_on=False):
-        with open(yaml_file, 'r') as file:
+def create_vm_from_iso(yaml_file,conf_file,turn_on=False):
+        with open(conf_file, 'r') as file:
             config = yaml.safe_load(file)
 
+        with open(yaml_file, 'r') as file:
+            template = yaml.safe_load(file)
+
+        #creating vcenter client, different than APIclient
+        session = requests.session()
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        client = create_vsphere_client(server=config['server'],
+                                                username=config['user'],
+                                                password=config['pass'], session=session)
+        servicemanager = ServiceManagerFactory.get_service_manager(config['server'],
+                                                                    config['user'],
+                                                                    config['pass'],
+                                                                    skip_verification=True)
         placement_spec = vm_placement_helper.get_placement_spec_for_resource_pool(
                     client,
-                    config['prereqs']['datacenter_name'],
-                    config['prereqs']['folder_name'],
-                    config['prereqs']['datastore_name'])
+                    template['prereqs']['datacenter_name'],
+                    template['prereqs']['folder_name'],
+                    template['prereqs']['datastore_name'])
 
-        iso_datastore_path = "[" + config['prereqs']['datastore_name'] + "] " + config['vm']['iso_path']
+        iso_datastore_path = "[" + template['prereqs']['datastore_name'] + "] " + template['vm']['iso_path']
         
         GiB = 1024 * 1024 * 1024
         GiBMemory = 1024
 
         disk_specs = []
-        for i in range(config['vm']['disks']):
+        for i in range(template['vm']['disks']):
                 current_disk = "disk" + str(i+1)
-                disk_specs.append(Disk.CreateSpec(new_vmdk=Disk.VmdkCreateSpec(name=config['vm'][current_disk]['name'],
-                                                  capacity=config['vm'][current_disk]['capacity'] * GiB)))
+                disk_specs.append(Disk.CreateSpec(new_vmdk=Disk.VmdkCreateSpec(name=template['vm'][current_disk]['name'],
+                                                  capacity=template['vm'][current_disk]['capacity'] * GiB)))
             
 
 
         nic_specs = []
-        for i in range(config['vm']['nics']):
+        for i in range(template['vm']['nics']):
             current_nic = "nic" + str(i+1)
             nic_specs.append(Ethernet.CreateSpec(
                     start_connected=True,
                     mac_type=Ethernet.MacAddressType.GENERATED,
                     backing=Ethernet.BackingSpec(
                         type=Ethernet.BackingType.STANDARD_PORTGROUP,
-                        network=get_network_id(client,config['vm'][current_nic]['network'],config['prereqs']['datacenter_name']))))
+                        network=get_network_id(client,template['vm'][current_nic]['network'],template['prereqs']['datacenter_name']))))
 
 
 
         vm_create_spec = VM.CreateSpec(
-            guest_os=config['vm']['guest_os'],
-            name=config['vm']['vm_name'],
+            guest_os=template['vm']['guest_os'],
+            name=template['vm']['vm_name'],
             placement=placement_spec,
-            hardware_version=config['vm']['hardware_version'],
-            cpu=Cpu.UpdateSpec(count=config['vm']['cpu_count'],
+            hardware_version=template['vm']['hardware_version'],
+            cpu=Cpu.UpdateSpec(count=template['vm']['cpu_count'],
                                cores_per_socket=1,
                                hot_add_enabled=False,
                                hot_remove_enabled=False),
-            memory=Memory.UpdateSpec(size_mib=config['vm']['memory'] * GiBMemory,
+            memory=Memory.UpdateSpec(size_mib=template['vm']['memory'] * GiBMemory,
                                      hot_add_enabled=False),
             disks=disk_specs,
             nics=nic_specs,
@@ -358,11 +368,24 @@ def create_vm_from_iso(client, yaml_file,turn_on=False):
 
         vm_info = client.vcenter.VM.get(vm)
         print('vm.get({}) -> {}'.format(vm, pp(vm_info)))
-        print("create_exhaustive_vm: Created VM '{}' ({})".format(config['vm']['vm_name'],vm))
+        print("create_exhaustive_vm: Created VM '{}' ({})".format(template['vm']['vm_name'],vm))
         
+        vm_obj = get_obj_by_moId(servicemanager.content,[vim.VirtualMachine], vm)
+        print("Deployed VM '{0}' with ID: {1}".format(template['vm']['vm_name'],vm))
+
+        # Print a summary of the deployed VM
+        vm_summary = vm_obj.summary.config
+        print('Guest OS: {0}'.format(vm_summary.guestId))
+        print('{0} CPU(s)'.format(vm_summary.numCpu))
+        print('{0} MB memory'.format(vm_summary.memorySizeMB))
+        print('{0} disk(s)'.format(vm_summary.numVirtualDisks))
+        print('{0} network adapter(s)'.format(vm_summary.numEthernetCards))
+
         if turn_on:
-            power_on(client,config['vm']['vm_name'])
+            power_on(client,template['vm']['vm_name'])
         return vm
+     
+
 
 
 #confirmed
@@ -386,17 +409,24 @@ def import_ova_to_ovf(yaml_file,conf_file):
         storage_backings = helper.create_storage_backings(service_manager=servicemanager,
                                                                datastore_name=datastore_name)
 
-        # Create a local content library backed by the VC datastore using vAPIs
-        local_lib_id = helper.create_local_library(storage_backings, template['vm']['lib_name'])
+
+        if template['vm']['existing_library_id'] == "None":
+            # Create a local content library backed by the VC datastore using vAPIs
+            local_lib_id = helper.create_local_library(storage_backings, template['vm']['lib_name'])
+            print('Content Library {0} created. ID: {1}'.format(template['vm']['lib_name'],local_lib_id))
+        else:
+            local_lib_id = template['vm']['existing_library_id']
+            print('Content Library found. ID: {}'.format(local_lib_id))
+
 
         # Create a new library item in the content library for uploading the files
         lib_item_id = helper.create_library_item(library_id=local_lib_id,
-                                                           item_name=template['vm']['destination_template_name'],
+                                                           item_name=template['vm']['template_name'],
                                                            item_description='Sample template from ova file',
                                                            item_type='ovf')
         print('Library item created. ID: {0}'.format(lib_item_id))
 
-        ova_file_map = helper.get_ova_file_map(template['vm']['current_relative_ova_dir'],
+        ova_file_map = helper.get_ova_file_map(template['vm']['ova_current_full_path'],
                                                     local_filename=template['vm']['current_ova_name'])
         # Create a new upload session for uploading the files
         # To ignore expected warnings and skip preview info check,
@@ -409,6 +439,156 @@ def import_ova_to_ovf(yaml_file,conf_file):
         cls_client.upload_service.complete(session_id)
         cls_client.upload_service.delete(session_id)
         print('Uploaded ova file as an ovf template to library item {0}'.format(lib_item_id))
+
+
+
+
+
+# confirmed
+def create_vm_from_ovf(yaml_file,conf_file):
+        with open(conf_file, 'r') as file:
+            config = yaml.safe_load(file)
+
+        with open(yaml_file, 'r') as file:
+            template = yaml.safe_load(file)
+
+        #creating vcenter client, different than APIclient
+        session = requests.session()
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        vcenter_client = create_vsphere_client(server=config['server'],
+                                                username=config['user'],
+                                                password=config['pass'], session=session)
+
+        # this helps find resource pool id
+        id_holder = vm_placement_helper.get_placement_spec_for_resource_pool(
+            vcenter_client,
+            template['prereqs']['datacenter_name'],
+            template['prereqs']['folder_name'],
+            template['prereqs']['datastore_name'])
+        
+
+        servicemanager = ServiceManagerFactory.get_service_manager(config['server'],
+                                                         config['user'],
+                                                         config['pass'],
+                                                         skip_verification=True)
+        client = ClsApiClient(servicemanager)
+        helper = ClsApiHelper(client, skip_verification=True)
+        
+
+        deployment_target = LibraryItem.DeploymentTarget(id_holder.resource_pool)
+
+        lib_item_id = helper.get_item_id_by_name(template['vm']['template_name'])
+        assert lib_item_id
+        ovf_summary = client.ovf_lib_item_service.filter(ovf_library_item_id=lib_item_id,
+                                                              target=deployment_target)
+        print('Found an OVF template :{0} to deploy.'.format(ovf_summary.name))
+
+        print(ovf_summary)
+
+
+
+        # Build the deployment spec
+        deployment_spec = LibraryItem.ResourcePoolDeploymentSpec(
+                                                                name=template['vm']['vm_name'],
+                                                                annotation=ovf_summary.annotation,
+                                                                accept_all_eula=True,
+                                                                network_mappings=None,
+                                                                storage_mappings=None,
+                                                                default_datastore_id=id_holder.datastore)
+
+        # Deploy the ovf template
+        result = client.ovf_lib_item_service.deploy(lib_item_id,
+                                                         deployment_target,
+                                                         deployment_spec,
+                                                         client_token=generate_random_uuid())
+
+        # The type and ID of the target deployment is available in the deployment result.
+        if result.succeeded:
+            print('Deployment successful. Result resource: {0}, ID: {1}'
+                  .format(result.resource_id.type, result.resource_id.id))
+            vm_id = result.resource_id.id
+            error = result.error
+            if error is not None:
+                for warning in error.warnings:
+                    print('OVF warning: {}'.format(warning.message))
+
+            vm = get_obj_by_moId(servicemanager.content,[vim.VirtualMachine], vm_id)
+            print("Deployed VM '{0}' with ID: {1}".format(template['vm']['vm_name'],vm_id))
+
+            # Print a summary of the deployed VM
+            vm_summary = vm.summary.config
+            print('Guest OS: {0}'.format(vm_summary.guestId))
+            print('{0} CPU(s)'.format(vm_summary.numCpu))
+            print('{0} MB memory'.format(vm_summary.memorySizeMB))
+            print('{0} disk(s)'.format(vm_summary.numVirtualDisks))
+            print('{0} network adapter(s)'.format(vm_summary.numEthernetCards))
+
+            # Power on the VM and wait  for the power on operation to be completed
+            vm_obj = get_obj_by_moId(servicemanager.content,
+                                          [vim.VirtualMachine], vm_id)
+            assert vm_obj is not None
+            poweron_vm(servicemanager.content, vm_obj)
+
+        else:
+            print('Deployment failed.')
+            for error in result.error.errors:
+                print('OVF error: {}'.format(error.message))
+
+#confirmed
+def update_networking(yaml_file,conf_file):
+        with open(conf_file, 'r') as file:
+            config = yaml.safe_load(file)
+
+        with open(yaml_file, 'r') as file:
+            template = yaml.safe_load(file)
+
+
+        #creating vcenter client, different than APIclient
+        session = requests.session()
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        client = create_vsphere_client(server=config['server'],
+                                                username=config['user'],
+                                                password=config['pass'], session=session)
+        servicemanager = ServiceManagerFactory.get_service_manager(config['server'],
+                                                                    config['user'],
+                                                                    config['pass'],
+                                                                    skip_verification=True)
+
+        vm = get_vm(client, template['vm']['vm_name'])
+        nic_list = client.vcenter.vm.hardware.Ethernet.list(vm)
+        print(nic_list)
+        for i in range(len(nic_list)):
+            print("Cleaning up {}".format(nic_list[i].nic))
+            client.vcenter.vm.hardware.Ethernet.delete(vm,nic_list[i].nic)
+        
+        
+        for i in range(template['vm']['nics']):
+            current_nic = "nic" + str(i+1)
+            nic = Ethernet.CreateSpec(
+                    start_connected=True,
+                    mac_type=Ethernet.MacAddressType.GENERATED,
+                    backing=Ethernet.BackingSpec(
+                        type=Ethernet.BackingType.STANDARD_PORTGROUP,
+                        network=get_network_id(client,template['vm'][current_nic]['network'],template['prereqs']['datacenter_name'])))
+            client.vcenter.vm.hardware.Ethernet.create(vm, nic)
+
+        
+        vm_obj = get_obj_by_moId(servicemanager.content,[vim.VirtualMachine], vm)
+        print("Updated VM '{0}' with ID: {1}".format(template['vm']['vm_name'],vm))
+
+        # Print a summary of the deployed VM
+        vm_summary = vm_obj.summary.config
+        print('Guest OS: {0}'.format(vm_summary.guestId))
+        print('{0} CPU(s)'.format(vm_summary.numCpu))
+        print('{0} MB memory'.format(vm_summary.memorySizeMB))
+        print('{0} disk(s)'.format(vm_summary.numVirtualDisks))
+        print('{0} network adapter(s)'.format(vm_summary.numEthernetCards))
+        nic_list = client.vcenter.vm.hardware.Ethernet.list(vm)
+        print(nic_list)
+
+        return vm
 
 
         
