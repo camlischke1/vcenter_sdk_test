@@ -6,11 +6,11 @@ prereqs:
   lib_item_name: cams_library
 
 vm:
-  vm_name: newUbuntuDesktop
+  vm_name: tdinca_TEST
   iso_path: "ISOs/rhel-baseos-9.0-x86_64-dvd.iso"
   lib_name: cams_library
   existing_library_id: b679c755-c743-4560-87fc-d137cc437871
-  template_name: UbuntuDesktop
+  template_name: UbuntuServer
   ova_current_full_path: /home/caldera/backup/vcenter_api_test/
   current_ova_name: bionic-server-cloudimg-amd64.ova
   cpu_count: 2

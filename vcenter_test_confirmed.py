@@ -23,7 +23,6 @@ from com.vmware.content.library.item_client import UpdateSessionModel
 from samples.vsphere.common.id_generator import generate_random_uuid
 from samples.vsphere.common.vim.helpers.vim_utils import (get_obj_by_moId, poweron_vm)
 
-
 ## PUT DEFINITIONS HERE !!!
 
 # confirmed
@@ -692,6 +691,7 @@ def create_vm_from_template(yaml_file,conf_file,turn_on=False):
         print("Deployed VM '{0}' with ID: {1}".format(vm.name,vm_id))
 
         update_networking(yaml_file,conf_file)
+        disconnect_cdroms(yaml_file,conf_file)
 
         # Print a summary of the deployed VM
         vm_summary = vm.summary.config
@@ -704,6 +704,31 @@ def create_vm_from_template(yaml_file,conf_file,turn_on=False):
         if turn_on:
             power_on(vsphere_client,template['vm']['vm_name'])
         return vm
+            
+def disconnect_cdroms(yaml_file,conf_file):
+        with open(conf_file, 'r') as file:
+                config = yaml.safe_load(file)
+
+        with open(yaml_file, 'r') as file:
+            template = yaml.safe_load(file)
+
+
+        #creating vcenter client, different than APIclient
+        session = requests.session()
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        vsphere_client = create_vsphere_client(server=config['server'],
+                                                username=config['user'],
+                                                password=config['pass'], session=session)
+        
+        vm = get_vm(vsphere_client, template['vm']['vm_name'])
+        cdrom_summaries = vsphere_client.vcenter.vm.hardware.Cdrom.list(vm=vm)
+        
+        for i in range(len(cdrom_summaries)):
+            print(vsphere_client.vcenter.vm.hardware.Cdrom.get(vm, cdrom_summaries[i].cdrom))
+            vsphere_client.vcenter.vm.hardware.Cdrom.delete(vm, cdrom_summaries[i].cdrom)
+            print('vm.hardware.Cdrom.delete({}, {})'.format(vm, cdrom_summaries[i].cdrom))
+            
         
 
 def main():
