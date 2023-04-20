@@ -19,34 +19,9 @@ from samples.vsphere.common.sample_util import pp
 from samples.vsphere.vcenter.helper import network_helper
 from samples.vsphere.vcenter.helper import vm_placement_helper
 from samples.vsphere.vcenter.helper.vm_helper import get_vm
-
-## PUT DEFINITIONS HERE !!!
-
-
-
-def main():
-    # uses what is set in .env file to define these global variables
-    esx_ip = config('VCENTER_IP')
-    user = config('VCENTER_USER')
-    pwd = config('VCENTER_PASS')
-    datacenter_name = config('DATACENTER')
-    datastore_name = config('DATASTORE')
-    iso_datastore_path = "[" + datastore_name + "] ISOs/ubuntu-18.04.5-live-server-amd64.iso"
-    network_id = "network-6009"       #ID for Orchestration 
-    vm_folder = 'vcenter_api_test_folder'
-    os_tag = "UBUNTU_64"
-    vm_name = "Camtest"
-
-    #initiates connection to vcenter, leave this as template
-    session = requests.session()
-    session.verify = False
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    client = create_vsphere_client(server=esx_ip, username=user, password=pwd, session=session)
-
-    #change whatever you want to do down here
-    
-
-
+from VCenterLib.vcenter_client import VcenterRangeClient
 
 if __name__ == '__main__':
-    main()
+    yaml_file = "DEFINE HERE"
+    conf_file = "DEFINE HERE"
+    v = VcenterRangeClient(conf_file,yaml_file)
